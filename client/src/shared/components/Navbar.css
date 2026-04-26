@@ -1,0 +1,102 @@
+.navbar {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-5);
+  background: var(--bg-navbar);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-color);
+  z-index: var(--z-navbar);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+}
+
+.navbar__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.navbar__menu-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+.navbar__menu-btn:hover {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.navbar__title-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.navbar__title {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.navbar__msg-count {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  background: var(--bg-badge);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.navbar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.navbar__model-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  border: 1px solid rgba(108,99,255,0.25);
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.navbar__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-accent-green);
+  font-weight: 500;
+}
+
+.navbar__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-accent-green);
+  box-shadow: 0 0 6px var(--color-accent-green);
+  animation: pulse 2.5s infinite;
+}
+
+@media (max-width: 480px) {
+  .navbar__model-badge span,
+  .navbar__status span {
+    display: none;
+  }
+}
