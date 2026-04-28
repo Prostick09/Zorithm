@@ -10,6 +10,10 @@ const messageSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  structured: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null
+  },
   mode: {
     type: String,
     default: 'Explain'

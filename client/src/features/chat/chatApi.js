@@ -14,9 +14,59 @@ export const createSession = async () => {
  * @param {string} sessionId
  * @param {string} mode
  */
-export const sendMessage = async (message, sessionId, mode = 'Explain') => {
-  const res = await api.post('/chat/message', { message, sessionId, mode })
-  return res.data
+export const sendMessage = async (message, sessionId, mode = 'Explain', model = 'qwen', onChunk = null) => {
+  const token = localStorage.getItem('token'); // get token if needed, or api handles it
+  // Using native fetch to process SSE streams
+  const response = await fetch('/api/chat/message', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({ message, sessionId, mode, model })
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || err.message || 'Failed to send message');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let done = false;
+  let finalResult = null;
+  let buffer = '';
+
+  while (!done) {
+    const { value, done: doneReading } = await reader.read();
+    done = doneReading;
+    if (value) {
+      buffer += decoder.decode(value, { stream: true });
+      let newlineIdx;
+      while ((newlineIdx = buffer.indexOf('\n\n')) >= 0) {
+        const line = buffer.slice(0, newlineIdx);
+        buffer = buffer.slice(newlineIdx + 2);
+        if (line.startsWith('data: ')) {
+          let data;
+          try {
+            data = JSON.parse(line.slice(6));
+          } catch (e) {
+            continue; // Ignore parse errors on incomplete chunks
+          }
+
+          if (data.error) {
+            throw new Error(data.error);
+          } else if (data.chunk && onChunk) {
+            onChunk(data.chunk);
+          } else if (data.done) {
+            finalResult = data.result;
+          }
+        }
+      }
+    }
+  }
+  
+  return finalResult || {};
 }
 
 /**

@@ -1,3 +1,5 @@
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { getComplexityColor, formatTime } from '../../shared/utils/helpers'
@@ -72,7 +74,9 @@ const BotResponseCard = ({ content }) => {
             <span className="bot-card__section-emoji">🎯</span>
             <h3>Approach</h3>
           </div>
-          <p className="bot-card__text">{approach}</p>
+          <div className="bot-card__text markdown-body">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{approach}</ReactMarkdown>
+          </div>
         </section>
       )}
 
@@ -83,7 +87,9 @@ const BotResponseCard = ({ content }) => {
             <span className="bot-card__section-emoji">💡</span>
             <h3>Intuition</h3>
           </div>
-          <p className="bot-card__text">{intuition}</p>
+          <div className="bot-card__text markdown-body">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{intuition}</ReactMarkdown>
+          </div>
         </section>
       )}
 
@@ -94,7 +100,9 @@ const BotResponseCard = ({ content }) => {
             <span className="bot-card__section-emoji">📋</span>
             <h3>Algorithm</h3>
           </div>
-          <p className="bot-card__text" style={{ whiteSpace: 'pre-line' }}>{algorithm}</p>
+          <div className="bot-card__text markdown-body">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{algorithm}</ReactMarkdown>
+          </div>
         </section>
       )}
 
@@ -142,7 +150,9 @@ const BotResponseCard = ({ content }) => {
             )}
           </div>
           {timeComplexity?.explanation && (
-            <p className="bot-card__text bot-card__text--small">{timeComplexity.explanation}</p>
+            <div className="bot-card__text bot-card__text--small markdown-body">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{timeComplexity.explanation}</ReactMarkdown>
+            </div>
           )}
         </section>
       )}
@@ -217,7 +227,9 @@ const BotResponseCard = ({ content }) => {
             <span className="bot-card__section-emoji">⚖️</span>
             <h3>Comparisons</h3>
           </div>
-          <p className="bot-card__text">{comparisons}</p>
+          <div className="bot-card__text markdown-body">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{comparisons}</ReactMarkdown>
+          </div>
         </section>
       )}
     </div>
@@ -288,7 +300,43 @@ export default function MessageBubble({ message }) {
         </svg>
       </div>
       <div className="message__content-wrap message__content-wrap--bot">
-        <BotResponseCard content={content} />
+        {message.structured ? (
+          <BotResponseCard content={message.structured} />
+        ) : (
+          <div className="bot-message__fallback markdown-body">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                code({node, inline, className, children, ...props}) {
+                  const match = /language-(\w+)/.exec(className || '')
+                  return !inline && match ? (
+                    <SyntaxHighlighter
+                      style={vscDarkPlus}
+                      language={match[1]}
+                      PreTag="div"
+                      customStyle={{
+                        margin: 0,
+                        borderRadius: '8px',
+                        fontSize: '0.78rem',
+                        background: '#0A0A18',
+                        border: '1px solid rgba(108,99,255,0.15)'
+                      }}
+                      {...props}
+                    >
+                      {String(children).replace(/\n$/, '')}
+                    </SyntaxHighlighter>
+                  ) : (
+                    <code className={className} {...props}>
+                      {children}
+                    </code>
+                  )
+                }
+              }}
+            >
+              {content}
+            </ReactMarkdown>
+          </div>
+        )}
         {timestamp && (
           <span className="message__timestamp">{formatTime(timestamp)}</span>
         )}

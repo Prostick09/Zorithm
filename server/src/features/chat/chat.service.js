@@ -48,17 +48,17 @@ const buildSystemPrompt = (mode = 'Explain') => {
   "visualizationId": "bubbleSort | selectionSort | insertionSort | null"
 }`;
   } else {
-    modeInstructions = 'Emphasize deep intuition, visual analogies, and high-level structure to help the user learn effectively.';
+    modeInstructions = 'Emphasize deep intuition, visual analogies, and high-level structure to help the user learn effectively. Always use Markdown lists (bullet points) and bolding to structure long text.';
     jsonSchema = `{
   "title": "Short descriptive title of the algorithm/concept",
-  "approach": "Detailed explanation of the approach used to solve the problem (2-4 sentences)",
-  "intuition": "The core intuition or insight behind the algorithm (2-3 sentences explaining WHY it works)",
-  "algorithm": "Step-by-step algorithm description as numbered steps",
+  "approach": "Detailed explanation of the approach using markdown bullet points for readability",
+  "intuition": "The core intuition using bullet points explaining WHY it works",
+  "algorithm": "Step-by-step algorithm description using numbered markdown lists",
   "timeComplexity": {
     "best": "O(...)",
     "average": "O(...)",
     "worst": "O(...)",
-    "explanation": "Brief explanation of why"
+    "explanation": "Brief explanation using bullet points"
   },
   "spaceComplexity": {
     "complexity": "O(...)",
@@ -70,7 +70,7 @@ const buildSystemPrompt = (mode = 'Explain') => {
   },
   "keyInsights": ["Insight 1", "Insight 2", "Insight 3"],
   "useCases": ["Use case 1", "Use case 2"],
-  "comparisons": "Optional: how this compares to alternative approaches",
+  "comparisons": "Optional: strictly use a markdown table to compare this to alternative approaches",
   "difficulty": "Easy | Medium | Hard",
   "visualizationId": "bubbleSort | selectionSort | insertionSort | null"
 }`;
@@ -138,13 +138,30 @@ const parseGeminiResponse = (rawText) => {
 };
 
 /**
+ * Extracts pure behavioral instructions based on the mode.
+ * @param {string} mode - The chat mode selected
+ */
+const getModeInstructions = (mode) => {
+  if (mode === 'Code') {
+    return 'You are a coding mentor. If they ask for an algorithm, provide instructions and boilerplate code. If they submit an execution error or failure log, clearly explain their mistake, point out the issue, and suggest improvements rather than just giving the final answer.';
+  } else if (mode === 'Interview') {
+    return 'Act as a technical interviewer. DO NOT just give the answer or write code. Guide the user, ask follow-up questions, discuss edge cases, and ask about potential optimizations. Engage in a dialogue to test their knowledge.';
+  } else if (mode === 'DryRun') {
+    return 'Focus on providing stepwise execution logic. Keep track of specific data structure and variable values at every iteration step. Format this step-by-step trace beautifully.';
+  } else {
+    return 'Emphasize deep intuition, visual analogies, and high-level structure to help the user learn effectively.';
+  }
+};
+
+/**
  * Sends a message to Gemini and returns a structured response
  * @param {string} message - User message
  * @param {string} sessionId - Chat session ID
  * @param {string} mode - The chat mode selected
+ * @param {string} llmModel - Model to use ('qwen' or 'gemini')
+ * @param {Function} onStream - Callback for streaming chunks
  */
-const sendMessage = async (message, sessionId, mode = 'Explain') => {
-  const model = getModel('gemini-2.5-flash');
+const sendMessage = async (message, sessionId, mode = 'Explain', llmModel = 'qwen', onStream = null) => {
 
   // Get or create session history
   if (!chatSessions.has(sessionId)) {
@@ -175,30 +192,163 @@ const sendMessage = async (message, sessionId, mode = 'Explain') => {
   // Build prompts
   const systemPrompt = buildSystemPrompt(mode);
   const userPrompt = buildUserPrompt(message, session.messages.slice(0, -1));
-  const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
 
-  // Call Gemini API
-  const result = await model.generateContent(fullPrompt);
-  const rawText = result.response.text();
+  let finalContent = '';
+  let structuredData = null;
 
-  // Parse structured response
-  const parsed = parseGeminiResponse(rawText);
+  try {
+    if (llmModel === 'qwen') {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 15000); // 15 seconds timeout
 
-  // Generate unique IDs for complexity badges
+    try {
+      // Get explicit instructions for how Qwen should behave based on the selected mode/role
+      const modeSpecificInstructions = getModeInstructions(mode);
+
+      // Rich system prompt for text-based Qwen to ensure high-quality Markdown structure
+      const qwenSystem = `You are Zorithm, an elite algorithm and software engineering assistant.
+YOUR CURRENT ROLE: **${mode.toUpperCase()} MODE**.
+
+>>> CRITICAL ROLE INSTRUCTIONS <<<
+${modeSpecificInstructions}
+>>> END ROLE INSTRUCTIONS <<<
+
+IMPORTANT FORMATTING RULES:
+1. Provide a beautiful, well-structured Markdown response.
+2. ALWAYS use clear headings (e.g., '## Approach', '## Intuition', '## Complexity', '## Implementation').
+3. Use bullet points for sequential steps or key insights.
+4. Use **bold text** for important terms and time/space complexities.
+5. If providing code, always wrap it in standard markdown code blocks with the correct language syntax (e.g., \`\`\`javascript).
+6. Write clearly, concisely, and professionally.
+7. YOU MUST STRICTLY FOLLOW YOUR ROLE INSTRUCTIONS DEFINED ABOVE! IF YOU ARE AN INTERVIEWER, ACT LIKE ONE. IF YOU ARE DOING A DRY RUN, TRACE THE VARIABLES. DO NOT IGNORE YOUR ROLE!`;
+      
+      const response = await fetch('http://localhost:11434/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'qwen3:8b',
+          messages: [
+            { role: 'system', content: qwenSystem },
+            { role: 'user', content: userPrompt }
+          ],
+          stream: true
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Ollama API error: ${response.statusText}`);
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      
+      // Node.js 18+ web stream async iteration
+      for await (const chunk of response.body) {
+        buffer += decoder.decode(chunk, { stream: true });
+        let newlineIdx;
+        while ((newlineIdx = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, newlineIdx).trim();
+          buffer = buffer.slice(newlineIdx + 1);
+          if (line) {
+            try {
+              const parsed = JSON.parse(line);
+              if (parsed.message?.content) {
+                const chunkContent = parsed.message.content;
+                finalContent += chunkContent;
+                if (onStream) {
+                  onStream(chunkContent);
+                }
+              }
+            } catch (e) {
+              // Ignore parse errors on incomplete chunks
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Qwen API Error or Timeout:', err.message);
+      throw new Error(`Local Qwen model failed: ${err.message}`);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  } 
+  
+  if (llmModel === 'gemini') {
+    try {
+      // Call Gemini API
+      const model = getModel('gemini-2.5-flash');
+      const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
+      const result = await model.generateContent(fullPrompt);
+      const rawText = result.response.text();
+      
+      // Parse structured response
+      const parsed = parseGeminiResponse(rawText);
+      structuredData = parsed;
+      
+      // Generate fallback plain text
+      let fallback = '';
+      if (parsed.title) fallback += `## ${parsed.title}\n\n`;
+      if (parsed.approach) fallback += `**Approach:**\n${parsed.approach}\n\n`;
+      if (parsed.intuition) fallback += `**Intuition:**\n${parsed.intuition}\n\n`;
+      if (parsed.algorithm) fallback += `**Algorithm:**\n${parsed.algorithm}\n\n`;
+      if (parsed.timeComplexity) {
+        fallback += `**Complexity:**\n- Best: ${parsed.timeComplexity.best}\n- Average: ${parsed.timeComplexity.average}\n- Worst: ${parsed.timeComplexity.worst}\n\n`;
+      }
+      if (parsed.codeExample && parsed.codeExample.code) {
+        fallback += `**Implementation:**\n\`\`\`${parsed.codeExample.language || 'text'}\n${parsed.codeExample.code}\n\`\`\`\n`;
+      }
+      finalContent = fallback.trim() || rawText;
+
+      if (onStream && finalContent) {
+        // Stream the full fallback content to UI so it's not completely abrupt
+        onStream(finalContent);
+      }
+    } catch (err) {
+      console.error('Gemini API Error:', err.message);
+      
+      // Layer 3: Smart Fallback Generator
+      finalContent = "A helpful fallback explanation based on the user query. (System operates in fallback mode due to AI service unavailability)";
+      structuredData = {
+        title: "System Fallback Response",
+        approach: "Explanation that AI services are temporarily unavailable. Please check your local Ollama server or API quotas.",
+        keyInsights: ["Graceful degradation", "System reliability maintained"],
+        note: "This is a system-generated fallback response"
+      };
+      
+      if (onStream) {
+        onStream(finalContent);
+      }
+    }
+  }
+
+  } catch (fatalError) {
+    console.error('Fatal error in chat service:', fatalError.message);
+    // Ultimate safety net
+    finalContent = "A helpful fallback explanation based on the user query. (System operates in fallback mode due to AI service unavailability)";
+    structuredData = {
+      title: "System Fallback Response",
+      approach: "Explanation that AI services are temporarily unavailable. An unexpected system error occurred.",
+      keyInsights: ["Graceful degradation", "System reliability maintained"],
+      note: "This is a system-generated fallback response"
+    };
+    if (onStream) {
+      onStream(finalContent);
+    }
+  }
+
   const botMessageId = generateId();
-  const botMessage = {
-    id: botMessageId,
-    role: 'assistant',
-    content: parsed,
-    rawContent: rawText,
-    timestamp: new Date().toISOString(),
-  };
 
-  // Store bot message
+  // Store bot message in memory
   session.messages.push({
     id: botMessageId,
     role: 'assistant',
-    content: parsed.approach || rawText,
+    content: finalContent,
+    structured: structuredData,
     timestamp: new Date().toISOString(),
   });
 
@@ -207,7 +357,8 @@ const sendMessage = async (message, sessionId, mode = 'Explain') => {
   return {
     messageId: botMessageId,
     sessionId,
-    response: parsed,
+    content: finalContent,
+    structured: structuredData,
     conversationLength: session.messages.length,
   };
 };

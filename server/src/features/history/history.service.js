@@ -38,3 +38,11 @@ exports.appendMessages = async (sessionId, title, newMessages) => {
     return newSession;
   }
 };
+
+/**
+ * Delete a session
+ */
+exports.deleteSession = async (sessionId) => {
+  const result = await History.deleteOne({ sessionId });
+  return result.deletedCount > 0;
+};

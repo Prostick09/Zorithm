@@ -13,5 +13,12 @@ export const historyApi = {
     if (!response.ok) throw new Error('Failed to fetch session details');
     const data = await response.json();
     return data.data || data;
+  },
+  
+  deleteSession: async (sessionId) => {
+    const response = await fetch(`${API_URL}/history/${sessionId}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error('Failed to delete session');
+    const data = await response.json();
+    return data;
   }
 };

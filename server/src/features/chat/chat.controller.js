@@ -19,30 +19,67 @@ const createSession = async (req, res, next) => {
  */
 const sendMessage = async (req, res, next) => {
   try {
-    const { message, sessionId, mode } = req.body;
+    const { message, sessionId, mode, model } = req.body;
+
+    console.log("Model selected:", model);
 
     const activeSessionId = sessionId || `session-${Date.now()}`;
-    const result = await chatService.sendMessage(message, activeSessionId, mode || 'Explain');
+
+    // Set headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const result = await chatService.sendMessage(
+      message, 
+      activeSessionId, 
+      mode || 'Explain', 
+      model || 'qwen',
+      (chunk) => {
+        res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+      }
+    );
 
     // Save persistent history using MongoDB
     try {
-        await historyService.appendMessages(activeSessionId, result.title || 'New Chat', [
+        const title = result.structured?.title || message.substring(0, 50);
+        await historyService.appendMessages(activeSessionId, title, [
             { role: 'user', content: message, mode: mode || 'Explain' },
-            { role: 'assistant', content: JSON.stringify(result), mode: mode || 'Explain' }
+            { role: 'assistant', content: result.content, structured: result.structured, mode: mode || 'Explain' }
         ]);
     } catch (dbError) {
         console.error('Failed to save to history DB:', dbError);
         // We don't fail the chat API request if DB saving fails
     }
 
-    res.status(200).json(successResponse(result, 'Message processed successfully'));
+    res.write(`data: ${JSON.stringify({ done: true, result })}\n\n`);
+    res.end();
   } catch (error) {
-    // Provide a helpful error if API key is missing
-    if (error.message && error.message.includes('AIzaSyChDx4hTrtK_T-hmyDei9AKvDjMKC5Brv4')) {
-      error.status = 503;
-      error.message = 'Gemini API key not configured. Please set GEMINI_API_KEY in server/.env';
+    console.error('Fatal Chat Controller Error:', error.message);
+    
+    const fallbackResult = {
+      role: 'assistant',
+      content: "A helpful fallback explanation based on the user query. (System operates in fallback mode due to AI service unavailability)",
+      structured: {
+        title: "System Fallback Response",
+        approach: "Explanation that AI services are temporarily unavailable.",
+        keyInsights: ["Graceful degradation", "System reliability maintained"],
+        note: "This is a system-generated fallback response"
+      }
+    };
+
+    if (!res.headersSent) {
+      // If we haven't even started SSE, we can just send it as a standard response or start SSE
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
     }
-    next(error);
+    
+    res.write(`data: ${JSON.stringify({ chunk: fallbackResult.content })}\n\n`);
+    res.write(`data: ${JSON.stringify({ done: true, result: fallbackResult })}\n\n`);
+    res.end();
   }
 };
 

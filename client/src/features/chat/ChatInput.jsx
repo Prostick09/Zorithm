@@ -22,6 +22,7 @@ const QUICK_PROMPTS = [
 ]
 
 import ModeSelector from './components/ModeSelector'
+import ModelSelector from './components/ModelSelector'
 
 export default function ChatInput() {
   const { sendMessage, isLoading } = useChat()
@@ -70,7 +71,10 @@ export default function ChatInput() {
 
   return (
     <div className="chat-input-container">
-      <ModeSelector />
+      <div style={{ display: 'flex', gap: '10px' }}>
+        <ModeSelector />
+        <ModelSelector />
+      </div>
       {/* Quick Prompts */}
       {showQuickPrompts && !isLoading && (
         <div className="quick-prompts">

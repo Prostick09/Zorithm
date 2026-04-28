@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
-import { createSession, sendMessage as apiSendMessage, deleteSession } from './chatApi'
+import { createSession, sendMessage as apiSendMessage } from './chatApi'
 import { historyApi } from '../history/historyApi'
 import { generateLocalId } from '../../shared/utils/helpers'
 
@@ -7,6 +7,7 @@ const ChatContext = createContext(null)
 
 export const ChatProvider = ({ children }) => {
   const [activeMode, setActiveMode] = useState('Explain')
+  const [activeModel, setActiveModel] = useState('qwen')
   const [activeVisualization, setActiveVisualization] = useState(null)
   const [sessions, setSessions] = useState([]) // sidebar history
   const [currentSessionId, setCurrentSessionId] = useState(null)
@@ -78,19 +79,49 @@ export const ChatProvider = ({ children }) => {
         setCurrentSessionId(sessionId)
       }
 
-      const result = await apiSendMessage(text, sessionId, activeMode)
-      
-      if (result.response?.visualizationId) {
-        setActiveVisualization(result.response.visualizationId)
-      }
-
-      const botMsg = {
-        id: result.messageId || generateLocalId(),
+      const botMsgId = generateLocalId()
+      const botMsgTemplate = {
+        id: botMsgId,
         role: 'assistant',
-        content: result.response,
+        content: '',
+        structured: null,
         timestamp: new Date().toISOString(),
       }
-      setMessages(prev => [...prev, botMsg])
+
+      const result = await apiSendMessage(text, sessionId, activeMode, activeModel, (chunk) => {
+        setIsLoading(false) // Hide the typing indicator once streaming starts
+        setMessages(prev => {
+          const exists = prev.find(m => m.id === botMsgId)
+          if (exists) {
+            return prev.map(m => 
+              m.id === botMsgId ? { ...m, content: m.content + chunk } : m
+            )
+          } else {
+            return [...prev, { ...botMsgTemplate, content: chunk }]
+          }
+        })
+      })
+      
+      if (result.response?.visualizationId || result.structured?.visualizationId) {
+        setActiveVisualization(result.response?.visualizationId || result.structured?.visualizationId)
+      }
+
+      const finalBotMsg = {
+        id: result.messageId || botMsgId,
+        role: 'assistant',
+        content: result.content || result.response,
+        structured: result.structured || null,
+        timestamp: new Date().toISOString(),
+      }
+      
+      setMessages(prev => {
+        const exists = prev.find(m => m.id === botMsgId)
+        if (exists) {
+          return prev.map(m => m.id === botMsgId ? finalBotMsg : m)
+        } else {
+          return [...prev, finalBotMsg]
+        }
+      })
 
       // Update sidebar sessions
       setSessions(prev => {
@@ -99,12 +130,12 @@ export const ChatProvider = ({ children }) => {
         if (existing) {
           return prev.map(s =>
             s.id === sessionId
-              ? { ...s, messageCount: (s.messageCount || 0) + 2, lastMessage: botMsg.timestamp }
+              ? { ...s, messageCount: (s.messageCount || 0) + 2, lastMessage: finalBotMsg.timestamp }
               : s
           )
         }
         return [
-          { id: sessionId, title: sessionTitle, messageCount: 2, lastMessage: botMsg.timestamp, createdAt: new Date().toISOString() },
+          { id: sessionId, title: sessionTitle, messageCount: 2, lastMessage: finalBotMsg.timestamp, createdAt: new Date().toISOString() },
           ...prev,
         ]
       })
@@ -122,11 +153,11 @@ export const ChatProvider = ({ children }) => {
     } finally {
       setIsLoading(false)
     }
-  }, [isLoading, activeMode])
+  }, [isLoading, activeMode, activeModel])
 
   const removeSession = useCallback(async (sessionId) => {
     try {
-      await deleteSession(sessionId)
+      await historyApi.deleteSession(sessionId)
       setSessions(prev => prev.filter(s => s.id !== sessionId))
       if (sessionIdRef.current === sessionId) {
         startNewChat()
@@ -144,9 +175,11 @@ export const ChatProvider = ({ children }) => {
       isLoading,
       error,
       activeMode,
+      activeModel,
       activeVisualization,
       sendMessage,
       setActiveMode,
+      setActiveModel,
       startNewChat,
       removeSession,
       loadSession,

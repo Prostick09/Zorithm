@@ -17,4 +17,9 @@ router.get('/:sessionId', historyController.getSessionById);
  */
 router.post('/save', historyController.saveSessionMessages);
 
+/**
+ * DELETE /api/history/:sessionId - Delete a session
+ */
+router.delete('/:sessionId', historyController.deleteSession);
+
 module.exports = router;

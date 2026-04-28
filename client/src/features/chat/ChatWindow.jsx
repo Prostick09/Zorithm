@@ -36,10 +36,10 @@ export default function ChatWindow() {
   const bottomRef = useRef(null)
   const scrollRef = useRef(null)
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom only when a new message is added or loading state changes
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isLoading])
+  }, [messages.length, isLoading])
 
   return (
     <div className="chat-window">
