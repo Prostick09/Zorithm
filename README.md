@@ -1,4 +1,4 @@
-# AlgoBot - AI-Powered Algorithm Chatbot
+# Zorithm - AI-Powered Algorithm Chatbot
 
 A modern, full-stack AI chatbot application designed to analyze algorithms and data structures using the Google Gemini API. Built with React (Vite) and Node.js (Express), following a scalable, feature-based architecture.
 
