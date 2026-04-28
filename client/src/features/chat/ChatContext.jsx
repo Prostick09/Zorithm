@@ -111,6 +111,7 @@ export const ChatProvider = ({ children }) => {
         role: 'assistant',
         content: result.content || result.response,
         structured: result.structured || null,
+        _retryPrompt: result.structured?.isFallback ? text : null,
         timestamp: new Date().toISOString(),
       }
       
@@ -147,6 +148,7 @@ export const ChatProvider = ({ children }) => {
           id: generateLocalId(),
           role: 'error',
           content: err.message,
+          _retryPrompt: text,
           timestamp: new Date().toISOString(),
         },
       ])

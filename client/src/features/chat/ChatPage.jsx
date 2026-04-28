@@ -1,12 +1,12 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { ChatProvider, useChat } from './ChatContext'
 import ChatWindow from './ChatWindow'
 import Sidebar from '../../shared/components/Sidebar'
 import Navbar from '../../shared/components/Navbar'
 import './ChatPage.css'
 
-import Visualizer from '../visualizer/Visualizer'
-import CodeEditorPane from '../practice/CodeEditorPane'
+const Visualizer = lazy(() => import('../visualizer/Visualizer'))
+const CodeEditorPane = lazy(() => import('../practice/CodeEditorPane'))
 
 // Inner page (needs ChatProvider context)
 function ChatPageInner({ theme, onThemeToggle }) {
@@ -51,10 +51,14 @@ function ChatPageInner({ theme, onThemeToggle }) {
             <ChatWindow />
           </div>
           {activeMode === 'Code' && (
-            <CodeEditorPane />
+            <Suspense fallback={<div style={{ flex: '0 0 420px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>Loading editor…</div>}>
+              <CodeEditorPane />
+            </Suspense>
           )}
           {showVisualizer && (
-            <Visualizer />
+            <Suspense fallback={<div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Loading visualizer…</div>}>
+              <Visualizer />
+            </Suspense>
           )}
         </div>
       </main>

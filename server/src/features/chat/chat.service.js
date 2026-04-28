@@ -258,7 +258,11 @@ IMPORTANT FORMATTING RULES:
             try {
               const parsed = JSON.parse(line);
               if (parsed.message?.content) {
-                const chunkContent = parsed.message.content;
+                // Sanitize Unicode artifacts from Ollama streaming
+                const chunkContent = parsed.message.content
+                  .replace(/A²/g, '²')
+                  .replace(/A³/g, '³')
+                  .replace(/Aⁿ/g, 'ⁿ');
                 finalContent += chunkContent;
                 if (onStream) {
                   onStream(chunkContent);
@@ -310,14 +314,20 @@ IMPORTANT FORMATTING RULES:
       }
     } catch (err) {
       console.error('Gemini API Error:', err.message);
+      console.error('Gemini Full Error:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
       
       // Layer 3: Smart Fallback Generator
-      finalContent = "A helpful fallback explanation based on the user query. (System operates in fallback mode due to AI service unavailability)";
+      const reason = err.message.includes('quota') ? 'API quota exhausted' 
+        : err.message.includes('403') ? 'API key unauthorized or billing disabled'
+        : err.message.includes('404') ? 'Model not available on your plan'
+        : `API error: ${err.message}`;
+
+      finalContent = `AI services are temporarily unavailable (${reason}). Please try again later or switch to the Qwen model.`;
       structuredData = {
         title: "System Fallback Response",
-        approach: "Explanation that AI services are temporarily unavailable. Please check your local Ollama server or API quotas.",
-        keyInsights: ["Graceful degradation", "System reliability maintained"],
-        note: "This is a system-generated fallback response"
+        approach: `The Gemini API returned an error: **${reason}**. You can try again or switch to the local Qwen model.`,
+        keyInsights: ["Try switching to Qwen model", "Check your Google AI Studio dashboard for quota/billing"],
+        isFallback: true
       };
       
       if (onStream) {
@@ -329,12 +339,12 @@ IMPORTANT FORMATTING RULES:
   } catch (fatalError) {
     console.error('Fatal error in chat service:', fatalError.message);
     // Ultimate safety net
-    finalContent = "A helpful fallback explanation based on the user query. (System operates in fallback mode due to AI service unavailability)";
+    finalContent = `AI services encountered an unexpected error. Please try again.`;
     structuredData = {
       title: "System Fallback Response",
-      approach: "Explanation that AI services are temporarily unavailable. An unexpected system error occurred.",
-      keyInsights: ["Graceful degradation", "System reliability maintained"],
-      note: "This is a system-generated fallback response"
+      approach: `An unexpected system error occurred: **${fatalError.message}**. Please try sending your message again.`,
+      keyInsights: ["Try sending your message again", "Switch models if the issue persists"],
+      isFallback: true
     };
     if (onStream) {
       onStream(finalContent);

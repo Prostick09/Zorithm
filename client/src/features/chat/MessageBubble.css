@@ -385,3 +385,37 @@
   color: var(--text-primary);
   font-weight: 700;
 }
+
+/* -- Retry / Fallback Bar ---------------------------------------- */
+.bot-card__retry-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  background: rgba(245, 158, 11, 0.08);
+  border-top: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.bot-card__retry-text {
+  font-size: var(--font-size-xs);
+  color: #F59E0B;
+  font-weight: 500;
+}
+
+.bot-card__retry-btn {
+  padding: 0.35rem 0.9rem;
+  border-radius: var(--radius-full);
+  background: rgba(108, 99, 255, 0.15);
+  border: 1px solid rgba(108, 99, 255, 0.3);
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.bot-card__retry-btn:hover {
+  background: rgba(108, 99, 255, 0.25);
+  transform: scale(1.03);
+}

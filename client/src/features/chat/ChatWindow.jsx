@@ -32,9 +32,11 @@ const EmptyState = () => (
 )
 
 export default function ChatWindow() {
-  const { messages, isLoading } = useChat()
+  const { messages, isLoading, activeModel } = useChat()
   const bottomRef = useRef(null)
   const scrollRef = useRef(null)
+
+  const modelDisplayName = activeModel === 'gemini' ? 'Gemini' : 'Qwen'
 
   // Auto-scroll to bottom only when a new message is added or loading state changes
   useEffect(() => {
@@ -52,7 +54,7 @@ export default function ChatWindow() {
             {messages.map(msg => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
-            {isLoading && <TypingIndicator />}
+            {isLoading && <TypingIndicator modelName={modelDisplayName} />}
             <div ref={bottomRef} style={{ height: 8 }} />
           </div>
         )}

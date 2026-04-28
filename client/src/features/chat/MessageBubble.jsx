@@ -3,6 +3,7 @@ import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { getComplexityColor, formatTime } from '../../shared/utils/helpers'
+import { useChat } from './ChatContext'
 import './MessageBubble.css'
 
 /* ── Complexity Badge ─────────────────────────────────── */
@@ -34,7 +35,7 @@ const CopyButton = ({ text }) => {
 }
 
 /* ── Bot Response Card ────────────────────────────────── */
-const BotResponseCard = ({ content }) => {
+const BotResponseCard = ({ content, onRetry }) => {
   if (typeof content === 'string') {
     return (
       <div className="bot-message__fallback">
@@ -232,12 +233,22 @@ const BotResponseCard = ({ content }) => {
           </div>
         </section>
       )}
+
+      {/* Retry Button for Fallback Responses */}
+      {content.isFallback && (
+        <div className="bot-card__retry-bar">
+          <span className="bot-card__retry-text">⚠️ This is a fallback response</span>
+          <button className="bot-card__retry-btn" onClick={onRetry}>
+            🔄 Retry
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
 /* ── Typing Indicator ─────────────────────────────────── */
-export const TypingIndicator = () => (
+export const TypingIndicator = ({ modelName = 'Zorithm' }) => (
   <div className="message message--bot" style={{ animation: 'slideInLeft 0.2s ease' }}>
     <div className="message__avatar message__avatar--bot">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -250,19 +261,24 @@ export const TypingIndicator = () => (
       <span className="typing-indicator__dot" style={{ animationDelay: '0ms' }} />
       <span className="typing-indicator__dot" style={{ animationDelay: '180ms' }} />
       <span className="typing-indicator__dot" style={{ animationDelay: '360ms' }} />
-      <span className="typing-indicator__text">Zorithm is thinking…</span>
+      <span className="typing-indicator__text">{modelName} is thinking…</span>
     </div>
   </div>
 )
 
 /* ── Error Bubble ─────────────────────────────────────── */
-const ErrorBubble = ({ content }) => (
+const ErrorBubble = ({ content, onRetry }) => (
   <div className="message message--error">
     <div className="error-bubble">
       <span className="error-bubble__icon">⚠️</span>
       <div>
         <p className="error-bubble__title">Error</p>
         <p className="error-bubble__text">{content}</p>
+        {onRetry && (
+          <button className="bot-card__retry-btn" onClick={onRetry} style={{ marginTop: '8px' }}>
+            🔄 Retry
+          </button>
+        )}
       </div>
     </div>
   </div>
@@ -271,8 +287,9 @@ const ErrorBubble = ({ content }) => (
 /* ── Main Message Bubble ──────────────────────────────── */
 export default function MessageBubble({ message }) {
   const { role, content, timestamp } = message
+  const { sendMessage } = useChat()
 
-  if (role === 'error') return <ErrorBubble content={content} />
+  if (role === 'error') return <ErrorBubble content={content} onRetry={message._retryPrompt ? () => sendMessage(message._retryPrompt) : null} />
 
   if (role === 'user') {
     return (
@@ -301,7 +318,7 @@ export default function MessageBubble({ message }) {
       </div>
       <div className="message__content-wrap message__content-wrap--bot">
         {message.structured ? (
-          <BotResponseCard content={message.structured} />
+          <BotResponseCard content={message.structured} onRetry={message._retryPrompt ? () => sendMessage(message._retryPrompt) : null} />
         ) : (
           <div className="bot-message__fallback markdown-body">
             <ReactMarkdown
